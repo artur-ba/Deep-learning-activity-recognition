@@ -68,6 +68,8 @@ def train(model, optimizer, train_loader, test_loader):
         result_np = np.array(result, dtype=float)
         np.savetxt('result.csv', result_np, fmt='%.2f', delimiter=',')
 
+    ## uncoment this to save model
+    # torch.save(model.state_dict(), 'sample_model')
 
 def plot():
     data = np.loadtxt('result.csv', delimiter=',')
@@ -81,6 +83,9 @@ def plot():
     plt.ylabel('Accuracy (%)', fontsize=14)
     plt.title('Training and Test Accuracy', fontsize=20)
     plt.show()
+
+def metrics():
+    ...
 
 
 if __name__ == '__main__':

@@ -8,9 +8,17 @@ import os
 
 # This is for showing the Tensorflow log
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+from distutils.command.config import config
 
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
+from sklearn import metrics
+
+test_losses = []
+test_accuracies = []
+train_losses = []
+train_accuracies = []
 
 
 # This is for parsing the X data, you can ignore it if you do not need preprocessing
@@ -41,6 +49,7 @@ def format_data_y(datafile):
     return YY
 
 
+
 # Load data function, if there exists parsed data file, then use it
 # If not, parse the original dataset from scratch
 def load_data():
@@ -54,7 +63,7 @@ def load_data():
     else:
         # This for processing the dataset from scratch
         # After downloading the dataset, put it to somewhere that str_folder can find
-        str_folder = 'Your root folder' + 'UCI HAR Dataset/'
+        str_folder = './UCI HAR Dataset/'
         INPUT_SIGNAL_TYPES = [
             "body_acc_x_",
             "body_acc_y_",
@@ -81,6 +90,24 @@ def load_data():
     return X_train, Y_train, X_test, Y_test
 
 
+def load_raw_y_test_data():
+    import os
+    y_file_path = './UCI HAR Dataset/test/y_test.txt'
+    if os.path.isfile(y_file_path):
+        file = open(y_file_path, 'r')
+        # Read dataset from disk, dealing with text file's syntax
+        y_ = np.array(
+            [elem for elem in [
+                row.replace('  ', ' ').strip().split(' ') for row in file
+            ]],
+            dtype=np.int32
+        )
+        file.close()
+
+        # Substract 1 to each output class for friendly 0-based indexing
+        return y_ - 1
+
+
 # A class for some hyperparameters
 class Config(object):
     def __init__(self, X_train, Y_train):
@@ -88,7 +115,7 @@ class Config(object):
         self.n_output = len(Y_train[0])  # number of output neurons
         self.dropout = 0.8  # dropout, between 0 and 1
         self.learning_rate = 0.001  # learning rate, float
-        self.training_epoch = 20  # training epoch
+        self.training_epoch = 30  # training epoch
         self.n_channel = 9  # number of input channel
         self.input_height = 128  # input height
         self.input_width = 1  # input width
@@ -96,6 +123,7 @@ class Config(object):
         self.depth = 32  # number of convolutions
         self.batch_size = 16  # batch size
         self.show_progress = 50  # how many batches to show the progress
+        self.total_batch = 0
 
         # weights and biases definition
         self.weights = {
@@ -145,7 +173,7 @@ def conv_net(x, W, b, dropout):
     fc3 = tf.add(tf.matmul(fc2, W['wd3']), b['bd3'])
     fc3 = tf.nn.relu(fc3)
     fc3 = tf.nn.dropout(fc3, keep_prob=dropout)
-    out = tf.add(tf.matmul(fc3, W['out']), b['out'])
+    out = tf.add(tf.matmul(fc3, W['out']), b['out'], name='prediction')
     return out
 
 
@@ -154,28 +182,34 @@ def network(X_train, Y_train, X_test, Y_test):
     config = Config(X_train, Y_train)
 
     # X, Y and keep_prob are three feeds to the network
-    X = tf.placeholder(tf.float32, shape=[None, config.input_height, config.input_width, config.n_channel])
-    Y = tf.placeholder(tf.float32, shape=[None, config.n_output])
-    keep_prob = tf.placeholder(tf.float32)
+    X = tf.placeholder(tf.float32, shape=[None, config.input_height, config.input_width, config.n_channel], name='X')
+    Y = tf.placeholder(tf.float32, shape=[None, config.n_output], name='Y')
+    keep_prob = tf.placeholder(tf.float32, name='keep')
 
     y_pred = conv_net(X, config.weights, config.biases, config.dropout)
-    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=Y, logits=y_pred))
+    l2 = 0.0015 * sum(
+        tf.nn.l2_loss(tf_var) for tf_var in tf.trainable_variables()
+    )
+    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=Y, logits=y_pred), name='cost') + l2
     optimizer = tf.train.AdamOptimizer(learning_rate=config.learning_rate).minimize(cost)
 
-    correct_pred = tf.equal(tf.arg_max(y_pred, 1), tf.argmax(Y, 1))
-    accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+    correct_pred = tf.equal(tf.arg_max(y_pred, 1), tf.argmax(Y, 1), name='correct_pred')
+    accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name='accuracy')
 
     total_batch = len(X_train) // config.batch_size
+    config.total_batch = total_batch
 
     init = tf.global_variables_initializer()
+    saver = tf.train.Saver()
     with tf.Session() as sess:
         sess.run(init)
         for i in range(config.training_epoch):
+            loss, acc = 0, 0
             for j in range(total_batch):
                 x_train_batch, y_train_batch = X_train[j * config.batch_size: config.batch_size * (j + 1)], \
                                                Y_train[j * config.batch_size: config.batch_size * (j + 1)]
                 x_train_batch = np.reshape(x_train_batch, [len(x_train_batch), 128, 1, 9])
-                sess.run(optimizer, feed_dict={X: x_train_batch, Y: y_train_batch, keep_prob: config.dropout})
+                _, loss, acc = sess.run([optimizer, cost, accuracy], feed_dict={X: x_train_batch, Y: y_train_batch, keep_prob: config.dropout})
                 if j % config.show_progress == 0:
                     loss, acc = sess.run([cost, accuracy],
                                          feed_dict={X: x_train_batch,
@@ -183,11 +217,19 @@ def network(X_train, Y_train, X_test, Y_test):
                                                     keep_prob: config.dropout})
                     print('Epoch:%02d,batch:%03d,loss:%.8f,accuracy:%.8f' % (
                         i + 1, (j + 1) * config.batch_size, loss, acc))
+            train_accuracies.append(loss)
+            train_accuracies.append(acc)
         print('Optimization finished!')
-        acc_test = sess.run(accuracy, feed_dict={X: np.reshape(X_test, [len(X_test), 128, 1, 9]),
+        # uncommnect to save model
+        #saver.save(sess, 'my_test_model')
+
+        one_hot_pred, acc_test, final_loss = sess.run([y_pred, accuracy, cost], feed_dict={X: np.reshape(X_test, [len(X_test), 128, 1, 9]),
                                                  Y: np.reshape(Y_test, [len(Y_test), 6]),
                                                  keep_prob: 1.})
+        test_accuracies.append(final_loss)
+        test_accuracies.append(acc_test)
         print('Accuracy of testing:%.8f' % acc_test)
+        print(f'Batch loss {final_loss}')
 
 
 if __name__ == '__main__':
