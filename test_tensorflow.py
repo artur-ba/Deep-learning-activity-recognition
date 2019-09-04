@@ -60,15 +60,15 @@ def show_metrics(prediction, testing_accuracy, testing_loss, y_test):
         interpolation='nearest',
         cmap=plt.cm.rainbow
     )
-    plt.title("Confusion matrix \n(normalised ot % of total test data)")
-    plt.colorbar()
-    tick_marks = np.arange(6)
-    plt.xticks(tick_marks, LABELS, rotation=90)
-    plt.yticks(tick_marks, LABELS)
-    plt.tight_layout()
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
-    plt.show()
+    # plt.title("Confusion matrix \n(normalised ot % of total test data)")
+    # plt.colorbar()
+    # tick_marks = np.arange(6)
+    # plt.xticks(tick_marks, LABELS, rotation=90)
+    # plt.yticks(tick_marks, LABELS)
+    # plt.tight_layout()
+    # plt.ylabel('True label')
+    # plt.xlabel('Predicted label')
+    # plt.show()
 
 
 if __name__ == "__main__":

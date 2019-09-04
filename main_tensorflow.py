@@ -8,12 +8,14 @@ import os
 
 # This is for showing the Tensorflow log
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-from distutils.command.config import config
+# from distutils.command.config import config
 
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from sklearn import metrics
+
+from configparser import ConfigParser
 
 test_losses = []
 test_accuracies = []
@@ -113,17 +115,21 @@ class Config(object):
     def __init__(self, X_train, Y_train):
         self.n_input = len(X_train[0])  # number of input neurons to the network
         self.n_output = len(Y_train[0])  # number of output neurons
-        self.dropout = 0.8  # dropout, between 0 and 1
-        self.learning_rate = 0.001  # learning rate, float
-        self.training_epoch = 30  # training epoch
-        self.n_channel = 9  # number of input channel
-        self.input_height = 128  # input height
-        self.input_width = 1  # input width
-        self.kernel_size = 64  # number of convolution kernel size
-        self.depth = 32  # number of convolutions
-        self.batch_size = 16  # batch size
-        self.show_progress = 50  # how many batches to show the progress
-        self.total_batch = 0
+        config = ConfigParser()
+        config.sections()
+        config.read('config.ini')
+        default_section = config['DEFAULT']
+        self.dropout = float(default_section['Dropout'])  # dropout, between 0 and 1
+        self.learning_rate = float(default_section['LearningRate'])  # learning rate, float
+        self.training_epoch = int(default_section['TrainingEpoch'])  # training epoch
+        self.n_channel = int(default_section['ChannelNumber'])  # number of input channel
+        self.input_height = int(default_section['InputHeight'])  # input height
+        self.input_width = int(default_section['InputWidth'])  # input width
+        self.kernel_size = int(default_section['KernelSize'])  # number of convolution kernel size
+        self.depth = int(default_section['Depth'])  # number of convolutions
+        self.batch_size = int(default_section['BatchSize'])  # batch size
+        self.show_progress = int(default_section['ShowProgress'])  # how many batches to show the progress
+        self.total_batch = int(default_section['TotalBatch'])
 
         # weights and biases definition
         self.weights = {
@@ -221,7 +227,7 @@ def network(X_train, Y_train, X_test, Y_test):
             train_accuracies.append(acc)
         print('Optimization finished!')
         # uncommnect to save model
-        #saver.save(sess, 'my_test_model')
+        saver.save(sess, 'my_test_model')
 
         one_hot_pred, acc_test, final_loss = sess.run([y_pred, accuracy, cost], feed_dict={X: np.reshape(X_test, [len(X_test), 128, 1, 9]),
                                                  Y: np.reshape(Y_test, [len(Y_test), 6]),
